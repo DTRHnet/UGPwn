@@ -89,6 +89,7 @@ created automatically. The JSON sidecar records the observation metadata for the
 ## Development
 
 ```sh
+make web      # build the Preact dashboard into browser/dashboard/dist
 make test     # unit tests (hermetic: no network, no database)
 make race     # unit tests under the race detector
 make vet      # go vet
@@ -98,6 +99,11 @@ make dist     # versioned tarball + SHA256SUMS under dist/
 
 The Go module lives in `browser/`. `download-worker.mjs` at the root is a thin
 import shim so the launcher and the module can share one worker implementation.
+
+The web UI is Vite + TypeScript + Preact under `web/`. `make web` builds it into
+`browser/dashboard/dist`, which `browser/dashboard.go` embeds with `go:embed`, so
+the shipped binary is self-contained — no separate static server. `web/CONTRACT.md`
+is the API contract shared by both halves; change it there first.
 
 Tests are hermetic: scrapers, cache, keybindings and dashboard handlers are
 exercised without touching the network or the site.

@@ -11,11 +11,14 @@ DISTDIR := dist
 NAME    := $(BIN)-$(VERSION)-linux-amd64
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(DATE)
 
-.PHONY: all build test race vet fmt check deps run dashboard dist clean
+.PHONY: all build web test race vet fmt check deps run dashboard dist smoke clean
 
 all: fmt vet test build
 
-build: ## build the binary with version metadata
+web: ## build the Preact dashboard into browser/dashboard/dist (embedded in the binary)
+	npm --prefix web run build
+
+build: web ## build the binary with version metadata
 	cd browser && go build -trimpath -ldflags '$(LDFLAGS)' -o ../$(BIN) .
 
 test: ## hermetic unit tests (no network, no database)
@@ -34,6 +37,7 @@ check: fmt vet test ## what CI runs
 
 deps:
 	npm install
+	npm --prefix web install
 
 run: build
 	./start.sh
@@ -50,5 +54,8 @@ dist: build ## versioned tarball + SHA256SUMS, no node_modules/tabs/logs
 	cd "$(DISTDIR)" && tar -czf "$(NAME).tar.gz" "$(NAME)"
 	cd "$(DISTDIR)" && sha256sum "$(NAME).tar.gz" > SHA256SUMS && cat SHA256SUMS
 
+smoke: build ## contract smoke test of the running dashboard
+	./scripts/smoke.sh ./$(BIN)
+
 clean:
-	rm -rf $(BIN) $(DISTDIR) browser/echoheistv2
+	rm -rf $(BIN) $(DISTDIR) browser/echoheistv2 browser/dashboard/dist

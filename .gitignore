@@ -18,3 +18,7 @@ SHA256SUMS
 
 # Node
 node_modules/
+.npm-cache/
+
+# Frontend build output is embedded into the binary; regenerate with `make web`
+/browser/dashboard/dist/
