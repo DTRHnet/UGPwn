@@ -55,6 +55,18 @@ auth "$BASE/api/config" -X PUT -H 'Content-Type: application/json' -d '{"workerP
 check "workerPath not settable over HTTP" "$orig_worker" \
   "$(authj "$BASE/api/config" | python3 -c 'import sys,json;print(json.load(sys.stdin)["workerPath"])' 2>/dev/null)"
 
+echo "== frontend serving (Vite bundle embedded via go:embed) =="
+check "index.html carries the token meta tag" 1 "$(curl -s "$BASE/" | grep -c 'name="echoheist-token"')"
+ASSET=$(curl -s "$BASE/" | grep -o '/dashboard/assets/[^"]*\.js' | head -1)
+if [ -n "$ASSET" ]; then
+  check "hashed asset served" 200 "$(curl -s -o /dev/null -w '%{http_code}' "$BASE$ASSET")"
+  check "bundle sends the token header" 1 "$(curl -s "$BASE$ASSET" | grep -c 'X-Echoheist-Token')"
+else
+  printf '  \033[33mSKIP\033[0m asset check (index.html references no /dashboard/assets/*.js)\n'
+fi
+check "SPA fallback serves index.html" 1 "$(curl -s "$BASE/history" | grep -c 'name="echoheist-token"')"
+check "stylesheet referenced" 1 "$(curl -s "$BASE/" | grep -c 'rel="stylesheet"')"
+
 echo "== documented endpoints =="
 for ep in /api/state /api/jobs /api/sources /api/history /api/favorites /api/logs /api/search?q= /api/artists /api/config /api/health; do
   check "GET $ep" 200 "$(auth "$BASE$ep")"

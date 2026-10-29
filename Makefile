@@ -3,7 +3,7 @@
 # `make` runs the full local gate: formatting, vet, tests, then a binary stamped
 # with version/commit/build date so a given artifact can be traced to a commit.
 
-VERSION ?= 0.2.0
+VERSION ?= 1.2.0
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 BIN     := echoheistv2
@@ -21,13 +21,15 @@ web: ## build the Preact dashboard into browser/dashboard/dist (embedded in the 
 build: web ## build the binary with version metadata
 	cd browser && go build -trimpath -ldflags '$(LDFLAGS)' -o ../$(BIN) .
 
-test: ## hermetic unit tests (no network, no database)
+# The Go package embeds browser/dashboard/dist, so it cannot compile until the
+# frontend has been built once. `web` is a normal prerequisite for that reason.
+test: web ## hermetic unit tests (no network, no database)
 	cd browser && go test ./...
 
-race: ## unit tests under the race detector
+race: web ## unit tests under the race detector
 	cd browser && go test -race -count=1 ./...
 
-vet:
+vet: web
 	cd browser && go vet ./...
 
 fmt:

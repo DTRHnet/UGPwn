@@ -42,7 +42,34 @@ no way to reach the API from another origin.
 By default the dashboard binds to `127.0.0.1:8787`. Override it with
 `ECHOHEIST_LISTEN=127.0.0.1:9090 ./start-dashboard.sh`. Binding it to a
 non-loopback address exposes an unauthenticated-by-network tool that can execute a
-local script — don't.
+local script — don't. Requests need the per-run token, but any client that can
+reach `/` is served that token, so loopback is the real boundary.
+
+## Web dashboard
+
+The dashboard is a three-column workspace: a navigation rail (`CORE` — Downloader,
+Batch Queue, History, Favorites; `SOURCES`; `TOOLS`; `SETTINGS`), a centre column
+of cards (URL bar with `HEIST IT`, `OPTIONS`, `QUEUE`, `OUTPUT` console) and a
+right-hand panel with `TRACK INFO`, `PREVIEW` and `FILE DETAILS`. A status bar
+carries the version, download totals, success rate and byte count.
+
+Navigation entries without an implementation are rendered **disabled with the
+reason in a tooltip** — nothing in the UI pretends to work.
+
+Keyboard: `/` search, `j`/`k` move the queue selection, `space` toggle row
+selection, `enter` open the tab, `ctrl+enter` queue.
+
+### Options: what is enforced and what is only recorded
+
+| Option | Behaviour |
+|---|---|
+| Timeout, retries, delay | **Enforced** on the worker: overall deadline, CDP body/navigation attempts, pause before navigation |
+| Verify files | **Enforced**: magic-byte (`FICHIER GUITAR PRO`) / content-type check before a file is saved |
+| Format | **Preference only** — biases the chosen extension; there is no transcoding |
+| Versions, include | **Recorded** in the sidecar report; they do not filter a single-file download |
+
+The UI states this next to the options row so the controls cannot be mistaken for
+conversions the tool does not perform.
 
 ## Flags
 

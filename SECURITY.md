@@ -67,6 +67,23 @@ failure modes.
   it loads: the page makes its own requests, and stage 4 is a separate out-of-page
   replay from Node.
 
+## Dashboard API surface
+
+- Every `/api/*` route requires the per-run token (`X-Echoheist-Token` header or
+  `?token=`), compared in constant time. The token is generated fresh on each
+  start and substituted into the served page.
+- No `Access-Control-Allow-*` header is emitted, so the API is same-origin only;
+  a cross-site page cannot read responses and preflighted requests fail.
+- `workerPath` is read-only over HTTP — it is the script that gets executed, so it
+  can only be set with `--worker` at startup.
+- `downloadDir` / `logDir` are validated (non-empty, no NUL bytes, cleaned) before
+  use.
+- Cancelling a job kills the worker's process group, so Chromium is not orphaned.
+- The live log ring buffer and the `logs/` files contain worker trace lines,
+  including response headers from the target page. Treat both as sensitive.
+- Job history and favorites are persisted in SQLite: tab metadata and local file
+  paths only, never credentials or captured cookies.
+
 ## Reporting
 
 This is internal research tooling; it has no external security contact. If you
