@@ -15,8 +15,15 @@ BASE="http://127.0.0.1:$PORT"
 pass=0
 fail=0
 server_pid=""
+# Keep the run hermetic: a private cache dir means the test never touches (or
+# depends on) the user's real SQLite cache.
+CACHE_HOME=${ECHOHEIST_SMOKE_CACHE:-$(mktemp -d)}
 
-cleanup() { [ -n "$server_pid" ] && kill "$server_pid" 2>/dev/null; wait "$server_pid" 2>/dev/null; }
+cleanup() {
+  [ -n "$server_pid" ] && kill "$server_pid" 2>/dev/null
+  wait "$server_pid" 2>/dev/null
+  rm -rf "$CACHE_HOME"
+}
 trap cleanup EXIT
 
 check() { # name expected actual
@@ -29,8 +36,9 @@ check() { # name expected actual
 
 [ -x "$BIN" ] || { echo "binary not found or not executable: $BIN (run make build)" >&2; exit 2; }
 
-"$BIN" --dashboard --listen "127.0.0.1:$PORT" \
-  --worker ./download-worker.mjs --download-dir ./tabs --log-dir ./logs >/tmp/eh-smoke.log 2>&1 &
+LOG_FILE="$CACHE_HOME/server.log"
+XDG_CACHE_HOME="$CACHE_HOME" "$BIN" --dashboard --listen "127.0.0.1:$PORT" \
+  --worker ./download-worker.mjs --download-dir ./tabs --log-dir ./logs >"$LOG_FILE" 2>&1 &
 server_pid=$!
 
 for _ in $(seq 1 50); do
@@ -39,7 +47,7 @@ for _ in $(seq 1 50); do
 done
 
 TOKEN=$(curl -s "$BASE/" | grep -o 'echoheist-token" content="[^"]*' | sed 's/.*content="//')
-[ -n "$TOKEN" ] || { echo "could not extract token from served page" >&2; cat /tmp/eh-smoke.log; exit 1; }
+[ -n "$TOKEN" ] || { echo "could not extract token from served page" >&2; cat "$LOG_FILE"; exit 1; }
 
 auth() { curl -s -o /dev/null -w '%{http_code}' -H "X-Echoheist-Token: $TOKEN" "$@"; }
 authj() { curl -s -H "X-Echoheist-Token: $TOKEN" "$@"; }
@@ -95,7 +103,16 @@ print(jobs[0]["id"] if jobs else "")
 ' 2>/dev/null)
 if [ -n "$JOB_ID" ]; then
   check "job is tracked" 1 "$(authj "$BASE/api/jobs" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["jobs"]))')"
-  check "DELETE /api/jobs/{id}" 200 "$(auth "$BASE/api/jobs/$JOB_ID" -X DELETE)"
+  # The invalid-host job fails almost immediately, so cancelling it races the
+  # worker. Both answers are correct: 200 when it was still cancelable, 409 when
+  # it had already finished. 404 here would mean the route conflates "missing"
+  # with "not cancelable".
+  CANCEL_CODE=$(auth "$BASE/api/jobs/$JOB_ID" -X DELETE)
+  case "$CANCEL_CODE" in
+    200|409) printf '  \033[32mPASS\033[0m %-46s %s\n' "cancel, or 409 for an already-finished job" "$CANCEL_CODE"; pass=$((pass+1)) ;;
+    *) printf '  \033[31mFAIL\033[0m %-46s want=200|409 got=%s\n' "cancel, or 409 for an already-finished job" "$CANCEL_CODE"; fail=$((fail+1)) ;;
+  esac
+  check "DELETE unknown job id is 404" 404 "$(auth "$BASE/api/jobs/no-such-job" -X DELETE)"
   authj "$BASE/api/jobs?since=0" | python3 -c 'import sys,json;d=json.load(sys.stdin);print("cursor-ok" if isinstance(d.get("cursor"),int) and "logs" in d else "bad")' \
     | { read -r r; check "incremental jobs cursor" cursor-ok "$r"; }
 else
@@ -110,4 +127,4 @@ check "DELETE /api/favorites/4242" 200 "$(auth "$BASE/api/favorites/4242" -X DEL
 
 echo
 echo "passed=$pass failed=$fail"
-[ "$fail" -eq 0 ] || { echo; echo "--- server log ---"; tail -30 /tmp/eh-smoke.log; exit 1; }
+[ "$fail" -eq 0 ] || { echo; echo "--- server log ---"; tail -30 "$LOG_FILE"; exit 1; }
