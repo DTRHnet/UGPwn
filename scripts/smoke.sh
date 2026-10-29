@@ -8,6 +8,7 @@
 # Usage: ./scripts/smoke.sh [binary] [port]
 set -uo pipefail
 
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 BIN=${1:-./echoheistv2}
 PORT=${2:-8791}
 BASE="http://127.0.0.1:$PORT"
@@ -72,23 +73,13 @@ for ep in /api/state /api/jobs /api/sources /api/history /api/favorites /api/log
   check "GET $ep" 200 "$(auth "$BASE$ep")"
 done
 
-echo "== state shape =="
-authj "$BASE/api/state" | python3 -c '
-import sys,json
-s=json.load(sys.stdin)
-need=["version","config","jobs","counts","metrics","sources","options"]
-missing=[k for k in need if k not in s]
-print("contract-ok" if not missing else "missing:"+",".join(missing))
-' | { read -r r; check "state keys per contract" contract-ok "$r"; }
-
-echo "== sources honesty =="
-authj "$BASE/api/sources" | python3 -c '
-import sys,json
-items=json.load(sys.stdin)["items"]
-ug=[s for s in items if s.get("id")=="ultimate-guitar"]
-bad=[s for s in items if not s.get("enabled") and not s.get("reason")]
-print("ok" if ug and ug[0].get("enabled") and not bad else "bad")
-' | { read -r r; check "ultimate-guitar enabled, disabled entries carry reasons" ok "$r"; }
+echo "== payload shapes (contract types) =="
+authj "$BASE/api/state" | python3 "$SCRIPT_DIR/shape_check.py" state \
+  | { read -r r; check "state payload types" shape-ok "$r"; }
+authj "$BASE/api/jobs?since=0" | python3 "$SCRIPT_DIR/shape_check.py" jobs \
+  | { read -r r; check "jobs payload types + log ordering" shape-ok "$r"; }
+authj "$BASE/api/sources" | python3 "$SCRIPT_DIR/shape_check.py" sources \
+  | { read -r r; check "sources payload + disabled reasons" shape-ok "$r"; }
 
 echo "== job lifecycle (invalid host, no site traffic) =="
 JOB=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Echoheist-Token: $TOKEN" -X POST \
