@@ -1,0 +1,11 @@
+{
+  "name": "echoheist-guitar-pro-browser",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "download": "node download-worker.mjs"
+  },
+  "dependencies": {
+    "puppeteer": "^25.15.0"
+  }
+}
