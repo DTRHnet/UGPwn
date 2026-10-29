@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -26,6 +27,32 @@ func OpenCache() (*Cache, error) {
 		return nil, err
 	}
 	return OpenCacheAt(filepath.Join(dir, "cache.db"))
+}
+
+// OpenMemoryCache opens a throwaway in-memory cache. It keeps every call site
+// working when the on-disk database is unavailable: browsing and search still
+// function, nothing is persisted. The single-connection pool set in OpenCacheAt
+// is what keeps the schema alive, since each SQLite connection would otherwise
+// get its own private in-memory database.
+func OpenMemoryCache() (*Cache, error) {
+	return OpenCacheAt(":memory:")
+}
+
+// openCacheWithFallback returns the on-disk cache when it can be opened and an
+// in-memory cache otherwise, reporting the degradation instead of aborting. A
+// read-only $HOME (common in sandboxes and containers) used to make the whole
+// process — including the dashboard — refuse to start.
+func openCacheWithFallback() (*Cache, error) {
+	c, err := OpenCache()
+	if err == nil {
+		return c, nil
+	}
+	memory, memoryErr := OpenMemoryCache()
+	if memoryErr != nil {
+		return nil, fmt.Errorf("cache: %v (in-memory fallback also failed: %w)", err, memoryErr)
+	}
+	fmt.Fprintf(os.Stderr, "warning: cache unavailable (%v); running with in-memory storage, nothing will be saved\n", err)
+	return memory, nil
 }
 
 // OpenCacheAt opens (and creates) the cache at an explicit path. Tests use a

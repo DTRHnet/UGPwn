@@ -144,8 +144,8 @@ func TestJobLifecycleQueueCancelRetry(t *testing.T) {
 		t.Fatalf("second job status = %q, want queued", queuedStatus)
 	}
 
-	if !s.cancelJob(queued.ID) {
-		t.Fatal("a queued job must be cancelable")
+	if got := s.cancelJob(queued.ID); got != cancelStarted {
+		t.Fatalf("canceling a queued job = %v, want cancelStarted", got)
 	}
 	s.mu.RLock()
 	got := s.jobs[queued.ID]
@@ -156,8 +156,8 @@ func TestJobLifecycleQueueCancelRetry(t *testing.T) {
 		t.Fatalf("queued cancel left status=%q ended=%v", queuedStatus, queuedEnded)
 	}
 
-	if !s.cancelJob(first.ID) {
-		t.Fatal("a running job must be cancelable")
+	if got := s.cancelJob(first.ID); got != cancelStarted {
+		t.Fatalf("canceling a running job = %v, want cancelStarted", got)
 	}
 	waitFor(t, "running job canceled", func() bool {
 		s.mu.RLock()
@@ -456,6 +456,80 @@ func TestCacheColdStart(t *testing.T) {
 	}
 	if job, err := cache.Job("nope"); err != nil || job != nil {
 		t.Fatalf("missing job = %#v, %v", job, err)
+	}
+}
+
+// TestOpenMemoryCacheKeepsAppUsable covers the degraded storage mode: with no
+// writable cache directory the app still needs a working store so browsing,
+// search and job bookkeeping keep functioning (just without persistence).
+func TestOpenMemoryCacheKeepsAppUsable(t *testing.T) {
+	cache, err := OpenMemoryCache()
+	if err != nil {
+		t.Fatalf("open memory cache: %v", err)
+	}
+	defer cache.Close()
+
+	if err := cache.SaveSetting(settingOptions, `{"format":"gp5"}`); err != nil {
+		t.Fatalf("save setting: %v", err)
+	}
+	if got, err := cache.Setting(settingOptions); err != nil || !strings.Contains(got, "gp5") {
+		t.Fatalf("setting = %q, %v", got, err)
+	}
+
+	ended := time.Now()
+	job := &Job{ID: "mem-1", Tab: Tab{ID: 3}, Status: StatusCompleted, StartedAt: ended.Add(-time.Minute), EndedAt: &ended, Options: defaultOptions()}
+	if err := cache.SaveJob(job); err != nil {
+		t.Fatalf("save job: %v", err)
+	}
+	history, err := cache.JobHistory(5)
+	if err != nil || len(history) != 1 || history[0].ID != "mem-1" {
+		t.Fatalf("history = %#v, %v", history, err)
+	}
+	if metrics, err := cache.Metrics(); err != nil || metrics.TotalDownloads != 1 {
+		t.Fatalf("metrics = %#v, %v", metrics, err)
+	}
+	if err := cache.AddFavorite(Tab{ID: 3}); err != nil {
+		t.Fatalf("add favorite: %v", err)
+	}
+	if favorites, err := cache.Favorites(); err != nil || len(favorites) != 1 {
+		t.Fatalf("favorites = %#v, %v", favorites, err)
+	}
+}
+
+// TestOpenCacheWithFallbackReturnsUsableCache points the cache directory at an
+// unwritable location and asserts the degraded path is taken and still yields a
+// working store. Under a root shell a 0500 directory stays writable, so the
+// scenario is not reachable there and the test skips rather than lying.
+func TestOpenCacheWithFallbackReturnsUsableCache(t *testing.T) {
+	readOnly := filepath.Join(t.TempDir(), "readonly")
+	if err := os.MkdirAll(readOnly, 0o500); err != nil {
+		t.Fatalf("create read-only dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(readOnly, 0o700) })
+	t.Setenv("XDG_CACHE_HOME", readOnly)
+
+	if _, err := OpenCache(); err == nil {
+		t.Skip("environment permits writing to an unwritable directory (running as root?); degraded path not reachable")
+	}
+
+	cache, err := openCacheWithFallback()
+	if err != nil {
+		t.Fatalf("fallback returned an error instead of a usable cache: %v", err)
+	}
+	defer cache.Close()
+
+	// The degraded store must behave like the real one for everything the UI does.
+	if err := cache.SaveSetting("probe", "1"); err != nil {
+		t.Fatalf("returned cache is not usable: %v", err)
+	}
+	if got, err := cache.Setting("probe"); err != nil || got != "1" {
+		t.Fatalf("probe = %q, %v", got, err)
+	}
+	if artists, err := cache.Artists(); err != nil || len(artists) != 0 {
+		t.Fatalf("artists on degraded cache = %#v, %v", artists, err)
+	}
+	if _, err := os.Stat(filepath.Join(readOnly, "echoheist-guitar-pro", "cache.db")); err == nil {
+		t.Fatal("fallback still wrote an on-disk database")
 	}
 }
 

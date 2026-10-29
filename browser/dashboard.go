@@ -405,39 +405,20 @@ func (s *dashboardState) jobAction(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w, http.MethodDelete)
 			return
 		}
-		if !s.cancelJob(id) {
-			// 404 means "no such job"; 409 means "it exists but is no longer
-			// cancelable". Conflating them made a finished job look like a typo
-			// in the caller's id.
-			if s.jobExists(id) {
-				writeError(w, http.StatusConflict, errors.New("job already finished"))
-				return
-			}
+		// Three outcomes, three statuses: unknown id (404), known but finished
+		// (409), and actually cancelable (200). Reporting 404 for both used to make
+		// a finished job look like a mistyped id.
+		switch s.cancelJob(id) {
+		case cancelUnknown:
 			writeError(w, http.StatusNotFound, errors.New("job not found"))
-			return
+		case cancelAlreadyFinished:
+			writeError(w, http.StatusConflict, errors.New("job already finished"))
+		default:
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	default:
 		writeError(w, http.StatusNotFound, fmt.Errorf("unknown job action %q", action))
 	}
-}
-
-// jobExists reports whether a job id is known either to the live registry or to
-// persisted history. It lets a handler distinguish "unknown id" (404) from
-// "known but no longer actionable" (409).
-func (s *dashboardState) jobExists(id string) bool {
-	s.mu.RLock()
-	_, live := s.jobs[id]
-	s.mu.RUnlock()
-	if live {
-		return true
-	}
-	if s.cache != nil {
-		if job, err := s.cache.Job(id); err == nil && job != nil {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *dashboardState) history(w http.ResponseWriter, r *http.Request) {

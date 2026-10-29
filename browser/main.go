@@ -29,9 +29,11 @@ func main() {
 		fmt.Printf("echoheistv2 %s (commit %s, built %s)\n", version, commit, buildDate)
 		return
 	}
-	c, e := OpenCache()
+	// A read-only $HOME must not stop the app from starting: fall back to an
+	// in-memory cache (with a warning) instead of aborting.
+	c, e := openCacheWithFallback()
 	if e != nil {
-		fmt.Fprintln(os.Stderr, "cache:", e)
+		fmt.Fprintln(os.Stderr, e)
 		os.Exit(1)
 	}
 	defer c.Close()

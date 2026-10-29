@@ -151,13 +151,39 @@ func (s *dashboardState) finish(job *Job, status, message, path string, bytes in
 	s.pruneJobs()
 }
 
-// cancelJob cancels a running job or retires a queued one.
-func (s *dashboardState) cancelJob(id string) bool {
+// cancelOutcome is what a DELETE /api/jobs/{id} request produced. It exists so
+// the handler can give each case its own status code: a finished job must not
+// look like a mistyped id.
+type cancelOutcome int
+
+const (
+	// cancelStarted: the job was queued and is now retired, or it was running and
+	// cancellation was requested. Maps to 200.
+	cancelStarted cancelOutcome = iota
+	// cancelAlreadyFinished: the id is known but the job already reached a
+	// terminal state. Maps to 409.
+	cancelAlreadyFinished
+	// cancelUnknown: no job with that id, neither live nor persisted. Maps to 404.
+	cancelUnknown
+)
+
+// cancelJob cancels a running job or retires a queued one, reporting which of the
+// three cases applied. The live lookup is a single critical section so a finished
+// job can never be confused with a mistyped id; persisted history is consulted
+// only for ids that are no longer live.
+func (s *dashboardState) cancelJob(id string) cancelOutcome {
 	s.mu.Lock()
 	job := s.jobs[id]
 	if job == nil {
 		s.mu.Unlock()
-		return false
+		// A job cleared from the live list but recorded in history is finished,
+		// not missing.
+		if s.cache != nil {
+			if stored, err := s.cache.Job(id); err == nil && stored != nil {
+				return cancelAlreadyFinished
+			}
+		}
+		return cancelUnknown
 	}
 	switch job.Status {
 	case StatusQueued:
@@ -173,7 +199,7 @@ func (s *dashboardState) cancelJob(id string) bool {
 			_ = s.cache.SaveJob(persisted)
 		}
 		s.pruneJobs()
-		return true
+		return cancelStarted
 	case StatusRunning:
 		job.canceled = true
 		cancel := job.cancel
@@ -182,10 +208,10 @@ func (s *dashboardState) cancelJob(id string) bool {
 		if cancel != nil {
 			cancel()
 		}
-		return true
+		return cancelStarted
 	default:
 		s.mu.Unlock()
-		return false
+		return cancelAlreadyFinished
 	}
 }
 
