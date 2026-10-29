@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="echoheist-token" content="{{ECHOHEIST_TOKEN}}" />
     <meta name="referrer" content="no-referrer" />
+    <!-- Inline icon so the browser never requests /favicon.ico (which the
+         dashboard answers 404, polluting the console). Uses the accent token. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235b30d6'/%3E%3Ctext x='16' y='23' font-family='system-ui,sans-serif' font-size='19' font-weight='700' fill='%23fff' text-anchor='middle'%3Ee%3C/text%3E%3C/svg%3E"
+    />
     <title>echoheist — guitar pro downloader</title>
   </head>
   <body>

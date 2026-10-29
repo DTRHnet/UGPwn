@@ -22,3 +22,6 @@ node_modules/
 
 # Frontend build output is embedded into the binary; regenerate with `make web`
 /browser/dashboard/dist/
+
+# Headless render evidence (regenerate with scripts/render_check.mjs)
+/ui-render.png
