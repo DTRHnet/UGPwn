@@ -1,7 +1,9 @@
 import { render } from "preact";
+import "./tokens.css";
+import "./app.css";
+import { App } from "./App";
 
-function App() {
-  return <main style="color:#c5c7cd;background:#070d15;font:14px Inter,system-ui,sans-serif;padding:24px">echoheist shell booting…</main>;
+const root = document.getElementById("app");
+if (root !== null) {
+  render(<App />, root);
 }
-
-render(<App />, document.getElementById("app")!);

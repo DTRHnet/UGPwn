@@ -1,0 +1,138 @@
+/* Design tokens measured from the echoheist v1.2.0 mockup (1536x1024 reference). */
+
+:root {
+  color-scheme: dark;
+
+  --page: #070d15;
+  --panel: #0d141e;
+  --panel-raised: #101825;
+  --border: #141c27;
+  --border-strong: #1d2836;
+
+  --heading: #ffffff;
+  --text: #c5c7cd;
+  --muted: #73737a;
+  --muted-dim: #565961;
+
+  --accent: #5b30d6;
+  --accent-hover: #6c3fe8;
+  --accent-soft: rgba(91, 48, 214, 0.16);
+  --accent-text: #b7a4f7;
+
+  --success: #31b352;
+  --danger: #d6455b;
+  --warn: #d9a441;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --hairline: 1px solid var(--border);
+
+  --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Measured column widths at 1536px; the grid scales from these ratios. */
+  --rail: 253px;
+  --side: 328px;
+  --header-h: 56px;
+  --footer-h: 40px;
+
+  --focus-ring: 0 0 0 2px var(--page), 0 0 0 4px var(--accent-text);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --page: #f4f5f7;
+  --panel: #ffffff;
+  --panel-raised: #ffffff;
+  --border: #e2e5ea;
+  --border-strong: #cfd4dc;
+
+  --heading: #0b0d10;
+  --text: #2c313a;
+  --muted: #62666e;
+  --muted-dim: #8b9099;
+
+  --accent: #5b30d6;
+  --accent-hover: #4a25bb;
+  --accent-soft: rgba(91, 48, 214, 0.1);
+  --accent-text: #4a25bb;
+
+  --success: #1f8f42;
+  --danger: #c02c44;
+  --warn: #a8761a;
+
+  --focus-ring: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  color: var(--heading);
+  font-weight: 600;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--page);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

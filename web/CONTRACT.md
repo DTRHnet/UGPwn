@@ -17,6 +17,13 @@ Security posture (do not weaken):
 ## Types (JSON field names are canonical)
 
 ```ts
+type Artist = {
+  id: number;
+  name: string;
+  url: string;
+  tabCount: number;
+};
+
 type Tab = {
   id: number; songId: number; artistId: number;
   song: string; artist: string; type: string; url: string;
@@ -63,6 +70,9 @@ type LogLine = {
 
 type Source = { id: string; name: string; enabled: boolean; reason?: string };
 
+// successRate is a FRACTION in 0..1 (completed / (completed+failed)), 0 when
+// nothing has finished yet — not a percentage. `bytes` is an absolute total of
+// saved bytes, never a rate.
 type Metrics = { totalDownloads: number; successRate: number; bytes: number };
 
 type State = {
@@ -109,6 +119,32 @@ All under `/api`, all token-gated, all JSON. Errors are
 `GET /api/jobs?since=N` returns every log line with `seq > N` plus the full current
 job list (job list is small; logs are incremental). The frontend keeps its own
 `cursor`.
+
+## Semantics the frontend must not assume away
+
+1. **Queueing starts work; there is no separate start endpoint.** `POST /api/jobs`
+   enqueues and the server's single-slot dispatcher begins immediately. A UI
+   "Start all" can therefore only mean "queue these rows" — it is not a scheduler
+   control, and the copy should say so.
+2. **`seq` is process-local.** The ring restarts at 1 when the dashboard restarts,
+   so a client holding a stale cursor would silently miss lines. A client that
+   sees `cursor` go backwards (or reloads) must reset its cursor to 0. Buffered
+   lines are capped (5 000) and the oldest are dropped; a client further behind
+   than the buffer accepts the gap rather than stalling.
+3. **There is no resolve-from-URL endpoint.** `POST /api/jobs` takes `Tab` objects
+   and trusts `url` as authoritative; a Tab carrying only a URL is queued with
+   empty artist/song, which the worker saves under `Unknown_Artist/Unknown_Song`.
+   Callers wanting real names should fetch the track first (`POST /api/fetch/tabs`)
+   and send a populated Tab.
+4. **`State.sources` is authoritative** for which sources the UI enables;
+   `GET /api/sources` returns the same list and exists for convenience. Entries
+   that are `enabled: false` always carry a `reason` and must render disabled.
+5. **`workerPath` is never writable over HTTP.** `PUT /api/config` accepts only
+   `downloadDir` and `logDir`; anything else in the body is ignored. `GET /api/config`
+   returns `workerPath` for display.
+6. **Cached artist reads** (`GET /api/artists`, `GET /api/artists/{id}`) exist but
+   the current UI browses through the live `POST /api/fetch/*` endpoints, which
+   return the same shape plus a `source` string.
 
 ## Worker protocol (stdout, one JSON object per line)
 
