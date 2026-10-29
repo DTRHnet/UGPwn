@@ -238,6 +238,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // lifecycle, download, error, and key browser milestones remain visible while
 // the lossless log file continues to receive every trace event.
 func showDebugEvent(event workerEvent) bool {
+	if event.Event == "progress" {
+		// High-frequency tick (up to ~5/s): the pane stays useful only if these
+		// are dropped. The log file still records everything.
+		return false
+	}
 	if event.Event != "trace" {
 		return true
 	}

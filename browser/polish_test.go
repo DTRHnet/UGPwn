@@ -118,12 +118,14 @@ func TestVKeyQueuesVariant(t *testing.T) {
 }
 
 func newTestDashboard() *dashboardState {
-	return &dashboardState{
-		config:   dashboardConfig{WorkerPath: "/opt/echoheist/download-worker.mjs", DownloadDir: "./tabs", LogDir: "./logs"},
-		jobs:     make(map[string]*dashboardJob),
-		token:    "test-token",
-		jobLimit: maxDashboardJobs,
-	}
+	// newDashboardState wires the log ring, job queue and default options. The
+	// runner is replaced per test so nothing spawns node or Chromium.
+	return newDashboardState(
+		dashboardConfig{WorkerPath: "/opt/echoheist/download-worker.mjs", DownloadDir: "./tabs", LogDir: "./logs"},
+		nil,
+		nil,
+		"test-token",
+	)
 }
 
 // TestDashboardAPIRequiresToken proves the drive-by chain is closed: without the
@@ -210,7 +212,9 @@ func TestDashboardPrunesFinishedJobs(t *testing.T) {
 	base := time.Now()
 	for i := 0; i < 5; i++ {
 		ended := base.Add(time.Duration(i) * time.Minute)
-		s.jobs[fmt.Sprintf("job-%d", i)] = &dashboardJob{ID: fmt.Sprintf("job-%d", i), Status: "completed", EndedAt: &ended}
+		id := fmt.Sprintf("job-%d", i)
+		s.jobs[id] = &Job{ID: id, Status: StatusCompleted, EndedAt: &ended}
+		s.order = append(s.order, id)
 	}
 	s.pruneJobs()
 	if len(s.jobs) > s.jobLimit {
@@ -223,5 +227,10 @@ func TestDashboardPrunesFinishedJobs(t *testing.T) {
 	}
 	if _, ok := s.jobs["job-4"]; !ok {
 		t.Fatal("newest job was pruned")
+	}
+	for _, id := range s.order {
+		if _, ok := s.jobs[id]; !ok {
+			t.Fatalf("queue order still references pruned job %q", id)
+		}
 	}
 }

@@ -35,10 +35,13 @@ func TestShowDebugEventLevelThree(t *testing.T) {
 			t.Fatalf("download-critical request failure %q should be visible", url)
 		}
 	}
-	for _, event := range []string{"started", "saved", "completed", "error"} {
+	for _, event := range []string{"started", "saved", "completed", "error", "canceled", "log"} {
 		if !showDebugEvent(workerEvent{Event: event}) {
 			t.Fatalf("lifecycle event %q should be visible", event)
 		}
+	}
+	if showDebugEvent(workerEvent{Event: "progress", Percent: 40}) {
+		t.Fatal("progress ticks must not flood the debug pane")
 	}
 }
 

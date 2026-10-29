@@ -34,6 +34,11 @@ type downloadProgress struct {
 
 type workerEvent struct {
 	Event   string `json:"event"`
+	JobID   string `json:"jobId"`
+	Level   string `json:"level"`
+	Text    string `json:"text"`
+	Percent int    `json:"percent"`
+	Total   int64  `json:"total"`
 	Code    string `json:"code"`
 	Phase   string `json:"phase"`
 	URL     string `json:"url"`

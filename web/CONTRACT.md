@@ -126,11 +126,14 @@ job list (job list is small; logs are incremental). The frontend keeps its own
    enqueues and the server's single-slot dispatcher begins immediately. A UI
    "Start all" can therefore only mean "queue these rows" — it is not a scheduler
    control, and the copy should say so.
-2. **`seq` is process-local.** The ring restarts at 1 when the dashboard restarts,
-   so a client holding a stale cursor would silently miss lines. A client that
-   sees `cursor` go backwards (or reloads) must reset its cursor to 0. Buffered
-   lines are capped (5 000) and the oldest are dropped; a client further behind
-   than the buffer accepts the gap rather than stalling.
+2. **`seq` is process-local.** The ring restarts at 1 when the dashboard restarts.
+   A client that reloads must reset its cursor to 0. As a safety net the server
+   replays from the start when `since` is *ahead* of the head, so a cursor that
+   survived a restart cannot leave the console permanently empty. Buffered lines
+   are capped (5 000) and the oldest are dropped; a client further behind than
+   the buffer accepts the gap rather than stalling.
+   `endedAt` is **omitted** (not `null`) while a job is unfinished; `startedAt`
+   carries queue time and is updated to the real start when execution begins.
 3. **There is no resolve-from-URL endpoint.** `POST /api/jobs` takes `Tab` objects
    and trusts `url` as authoritative; a Tab carrying only a URL is queued with
    empty artist/song, which the worker saves under `Unknown_Artist/Unknown_Song`.

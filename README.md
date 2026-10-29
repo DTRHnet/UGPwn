@@ -82,6 +82,32 @@ conversions the tool does not perform.
 | `--listen` | `127.0.0.1:8787` | dashboard bind address |
 | `--version` | | print version/commit/build date and exit |
 
+### Download worker flags
+
+The dashboard and the TUI spawn `browser/download-worker.mjs` once per job:
+
+| Flag | Meaning | Enforced? |
+|---|---|---|
+| `--url`, `--output-dir`, `--artist`, `--song`, `--job-id` | job definition | — |
+| `--format gp5` | preferred file extension | **preference only** (no transcoding) |
+| `--versions a,b`, `--include x,y` | written into the sidecar report | **recorded only** |
+| `--timeout-sec 30` | overall deadline; also bounds the CDP body read | **enforced** |
+| `--retries 5` | CDP body attempts and navigation retries | **enforced** |
+| `--delay-sec 1.5` | pause before navigating | **enforced** |
+| `--verify 1` | magic-byte (`FICHIER GUITAR PRO`), ZIP container or content-type check before saving | **enforced** |
+
+`--verify` defaults to **on** for both front ends, so an HTML error or login page
+returned with a 200 is rejected instead of being saved as a `.gp*` file. Pass
+`--verify 0` to disable it. Note that the worker's own defaults for
+`--timeout-sec`/`--delay-sec` are 0 (no deadline / no pause): only the dashboard
+always passes the contract defaults.
+
+### Building from a clean clone
+
+`browser/dashboard/dist` is generated and git-ignored, so `go build ./...` inside
+`browser/` fails with an `embed` error until the frontend has been built once.
+Use `make` (or `make web`) first.
+
 ## Terminal UI controls
 
 | Key | Action |
