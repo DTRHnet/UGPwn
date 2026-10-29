@@ -298,7 +298,16 @@ async function main() {
 
   emit({ event: "started", jobId, url, requestedUrl });
   trace(jobId, "arguments", { requestedUrl, url, outputDir, artist: args.artist || null, song: args.song || null, pid: process.pid, cwd: process.cwd() });
-  log(jobId, "info", `starting ${jobId} (format ${formatPreference || "gp7"}, timeout ${timeoutSec || "none"}s, retries ${retries}, delay ${delaySec}s, verify ${verifyEnabled})`);
+  // Mirrors the contract's enforced / preference / recorded split, so the first
+  // line an operator reads does not overstate what the worker actually does.
+  log(
+    jobId,
+    "info",
+    `starting ${jobId} — enforced: timeout ${timeoutSec > 0 ? `${timeoutSec}s` : "none"}, ` +
+      `retries ${retries}, delay ${delaySec}s, verify ${verifyEnabled ? "on" : "OFF"}; ` +
+      `preference: format ${formatPreference || "gp7"}; ` +
+      `recorded: versions [${versions.join(", ") || "none"}], include [${include.join(", ") || "none"}]`
+  );
   try {
     const configured = process.env.CHROME_PATH || process.env.PUPPETEER_EXECUTABLE_PATH;
     const candidates = [configured, "/usr/bin/google-chrome", "/opt/google/chrome/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"].filter(Boolean);
@@ -404,8 +413,18 @@ async function main() {
     stopProgress = startProgressReporter(jobId, tempDir, () => expectedSize);
     if (delaySec > 0) {
       // Enforced option: pause before navigating so rapid batches stay polite.
-      log(jobId, "info", `waiting ${delaySec}s before navigation`);
-      await sleep(delaySec * 1000);
+      // Clamped to the remaining budget so --delay-sec 60 against a 30s timeout
+      // cannot run past the job deadline (and never starts navigation only to
+      // fail immediately afterwards).
+      const remaining = deadline ? deadline - Date.now() : Number.POSITIVE_INFINITY;
+      const pauseMs = Math.min(delaySec * 1000, Math.max(0, remaining));
+      if (pauseMs > 0) {
+        log(jobId, "info", `waiting ${(pauseMs / 1000).toFixed(1)}s before navigation`);
+        await sleep(pauseMs);
+      }
+      if (deadline && Date.now() >= deadline) {
+        throw new Error(`timeout after ${timeoutSec}s during the pre-navigation delay`);
+      }
     }
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       checkDeadline("navigation");
