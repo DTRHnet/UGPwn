@@ -145,7 +145,57 @@ Guitar Pro version, and its `curl` replay is gone.
 
 The metadata observation is still the full finding, and it is still reproducible.
 
-## 6. Impact
+## 6. How it got here
+
+The tool did not start as a tool. It started as one shell script wrapped around a
+browser, and each stage below exists because the previous one ended too early.
+
+**Stage 1 — console only.** The first version was `upstream-echoHEIST.sh` and
+nothing else: a short shell script that launched headless Chrome through an inline
+`node -e`, waited for the page to request `/download/public/`, printed the
+captured URL in the terminal and replayed it with `curl`. That confirmed the
+finding and was useless for anything else — one URL at a time, typed by hand.
+
+**Stage 2 — scraping, and fuzzy picking.** You cannot see a catalogue by pasting
+URLs into a script, so the next step was scraping: artist lists per letter, songs
+per artist, then the tab detail page for the Guitar Pro variants and their
+metadata. The scraper reads the JSON the pages already embed instead of parsing
+markup, which is where most of its reliability comes from
+(`browser/fetcher.go`). Getting the right row out of those lists was the other
+half, and fuzzy finding was the interaction that fit — type a few characters, get
+the row you meant, press enter. That first picker was a small fzf-driven tool and
+was never published; what survives is the behaviour, now built in: the `/` query
+bar and a `fuzzyMatch` that mirrors a fuzzy finder's subsequence matching, so no
+external binary is needed.
+
+**Stage 3 — the TUI, and tmux.** One row per run was still too slow, so the next
+build put the whole result tree on screen: an Ink/React CLI
+([`DTRHnet/133748`](https://github.com/DTRHnet/133748), v0.2.0-alpha, changelog
+entries from May 2025) with arrow-key navigation, expandable artist/song/tab
+nodes, sorting by type, artist, song or tab type, a `grab` command for a single
+tab, and the ability to mark several rows and grab them one after another. One
+process still shows one view, which is where tmux came in: the picker in one pane,
+the worker's output in another, the queue in a third, moving between them instead
+of retyping a command. This repository is the same idea folded into one Go
+process — `browser/ui.go`: an alphabet strip, artists, songs and their variants, a
+preview pane, `Tab` to move focus, `Space`/`v` to queue, `w` to run, and a SQLite
+cache so a second visit does not refetch what the first already saw.
+
+**Stage 4 — the dashboard.** 133748 then grew a web side — Express plus a
+Vite/React front end with real-time progress and batch downloads — and this
+repository's dashboard is the current version of that idea: a Go HTTP server
+serving an embedded Preact bundle behind a per-run token, driving the same worker
+through a job queue with progress, per-job logs, persisted history and favorites
+(`browser/dashboard.go`, `browser/jobs.go`, `web/`). It answers what the TUI could
+not — what ran, what failed, what the totals are — and it is the view in the
+screenshot at the top of this page.
+
+**Stage 5 — taking the download away.** Every stage above made retrieving the file
+easier, which is the wrong direction for something meant to be evidence. The
+payload path is gone (§5): the same panes, the same queue, the same dashboard,
+now reporting what the response is instead of keeping it.
+
+## 7. Impact
 
 An under-entitled session can obtain Guitar Pro documents that the service
 presents as gated. The impact is that of the gated content itself: licensed
@@ -156,7 +206,7 @@ completing the flow the service built its entitlement around.
 This is an authorization-design defect, not a memory-safety or injection bug:
 nothing is corrupted, and no account is taken over.
 
-## 7. Remediation
+## 8. Remediation
 
 1. **Enforce entitlement at the resource.** The download route must re-check the
    caller's session and entitlement server-side on every request, and answer
@@ -174,7 +224,7 @@ nothing is corrupted, and no account is taken over.
    automated extraction trivial; a gated response should never describe the size
    and name of the file it is withholding.
 
-## 8. Scope and honesty notes
+## 9. Scope and honesty notes
 
 - **What is claimed:** the observed behaviour of the download route described
   above, as demonstrated with this repository's tooling in January 2025.
@@ -375,5 +425,5 @@ exercised without touching the network or the site.
 - Not a public release, package, or service.
 - Not affiliated with or endorsed by Ultimate Guitar.
 - Not a downloader: it observes one documented flow and saves nothing (see
-  sections 1–8 above for what the observation proves).
+  sections 1–9 above for what the observation proves).
 - Not safe to expose beyond loopback (see [SECURITY.md](SECURITY.md)).
