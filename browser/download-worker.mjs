@@ -240,7 +240,8 @@ async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
     process.stdout.write(
-      "Usage: node download-worker.mjs --url <tab-url> --output-dir <dir> [--job-id <id>] [--format gp7|gp6|gp5|gpx|gp] [--versions a,b] [--include a,b] [--timeout-sec N] [--retries N] [--delay-sec N] [--verify 0|1]\n"
+      "Usage: node download-worker.mjs --url <tab-url> --output-dir <dir> [--job-id <id>] [--format gp7|gp6|gp5|gpx|gp] [--versions a,b] [--include a,b] [--timeout-sec N] [--retries N] [--delay-sec N] [--verify 0|1]\n" +
+        "Observe-only build: reports artist, song, size and Guitar Pro format. It never writes the payload and never replays the captured request. See README.md.\n"
     );
     return;
   }
@@ -267,8 +268,10 @@ async function main() {
     }
   };
 
-  await fs.mkdir(outputDir, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "echoheist-download-"));
+  // The download directory is intentionally not created or written to: this
+  // build reports metadata only. `outputDir` survives only for the trace line,
+  // so an operator can see which flag was passed and ignored.
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "echoheist-observe-"));
   let browser;
   const observations = [];
   let bodyBuffer = null;
@@ -460,68 +463,66 @@ async function main() {
       stopProgress();
       stopProgress = null;
     }
-    if (!bodyBuffer && downloadRequest) {
-      // Kept deliberately: the capture-and-replay path is what makes the
-      // access-control finding reproducible without browser download plumbing.
-      // See SECURITY.md — it re-issues the page's own request, cookies included.
-      log(jobId, "warn", "no browser body was produced; using the capture-and-replay fallback");
-      trace(jobId, "fetch-fallback-start", { url: downloadRequest.url, headers: Object.keys(downloadRequest.headers) });
-      const direct = await fetch(downloadRequest.url, { method: "GET", headers: downloadRequest.headers, redirect: "follow" });
-      trace(jobId, "fetch-fallback-response", { status: direct.status, ok: direct.ok, url: direct.url, headers: Object.fromEntries(direct.headers.entries()) });
-      if (direct.ok) bodyBuffer = Buffer.from(await direct.arrayBuffer());
+    // ── Observe-only boundary ───────────────────────────────────────────────
+    // Everything above this line is observation: the page makes its own
+    // requests and this process only reads what Chromium already received.
+    // Three things are deliberately absent from this build and must stay absent:
+    //
+    //   1. no replay — the captured request is never re-issued from Node, so the
+    //      payload is never fetched outside the browser session that the page
+    //      believed it was serving;
+    //   2. no persistence — nothing is written to --output-dir, not even a
+    //      sidecar report;
+    //   3. no `saved` event — no caller can be handed a file.
+    //
+    // The artifact of a run is metadata: artist, song, byte count and the Guitar
+    // Pro format the server declared. See README.md and SECURITY.md.
+    if (downloadRequest) {
+      log(jobId, "info", "intercepted the download request; out-of-browser replay is disabled in this build");
+      trace(jobId, "replay-disabled", { url: downloadRequest.url, headers: Object.keys(downloadRequest.headers) });
     }
     if (canceled) throw new Error("canceled");
-    if (!bodyBuffer || bodyBuffer.length === 0) throw new Error("No browser download was produced");
-    const artistDir = safeSegment(args.artist, "Unknown Artist");
-    const songDir = safeSegment(args.song, "Unknown Song");
-    const destinationDir = path.join(outputDir, artistDir, songDir);
-    await fs.mkdir(destinationDir, { recursive: true });
-    const responseObservation = observations.find(item => item.event === "response");
-    // Enforced option: reject an HTML error page that arrived with a 200.
-    let verification = { ok: false, skipped: true };
-    if (verifyEnabled) {
-      verification = verifyPayload(bodyBuffer, responseObservation?.contentType);
-      if (!verification.ok) {
-        throw new Error(`payload failed verification: ${verification.reason}`);
-      }
-      log(jobId, "info", `payload verified (${verification.kind})`);
-    } else {
-      log(jobId, "warn", "payload verification disabled (--verify 0)");
+    if ((!bodyBuffer || bodyBuffer.length === 0) && !expectedSize && !expectedName) {
+      throw new Error("no download response was observed");
     }
+    const responseObservation = observations.find(item => item.event === "response");
+    // The payload check still runs, but a failure is reported instead of acted
+    // on: nothing is saved, so there is no file to reject.
+    let verification = { ok: false, skipped: true };
+    if (bodyBuffer && bodyBuffer.length > 0) {
+      if (verifyEnabled) {
+        verification = verifyPayload(bodyBuffer, responseObservation?.contentType);
+        if (!verification.ok) {
+          log(jobId, "warn", `payload failed verification: ${verification.reason}`);
+        } else {
+          log(jobId, "info", `payload verified (${verification.kind})`);
+        }
+      } else {
+        log(jobId, "warn", "payload verification disabled (--verify 0)");
+      }
+    }
+    // The extension is what the server declared (filename or content type) —
+    // this is the "which Guitar Pro version" half of the observation.
     const extension = extensionFor(expectedName, responseObservation?.contentType, formatPreference);
-    const baseName = safeFilename(args.song || "ug-download").replace(/[. ]+$/gu, "") || "ug-download";
-    const version = await nextVersion(destinationDir, baseName, extension);
-    const destination = path.join(destinationDir, `${baseName}_v${version}${extension}`);
-    // Keep the staging file beside the final file. The browser temp directory
-    // may be on a different filesystem, where rename() would fail with EXDEV.
-    const staged = path.join(destinationDir, `.staged-${process.pid}-${Date.now()}`);
-    await fs.writeFile(staged, bodyBuffer, { flag: "wx" });
-    await fs.rename(staged, destination);
-    trace(jobId, "file-saved", { staged, destination, bytes: bodyBuffer.length });
-    const report = {
-      jobId,
-      url,
-      capturedAt: new Date().toISOString(),
-      pageTitle: title,
-      observations,
-      path: destination,
-      bytes: bodyBuffer.length,
-      // Preference metadata: recorded, not applied to the payload.
-      options: {
-        format: formatPreference || null,
-        versions,
-        include,
-        timeoutSec,
-        retries,
-        delaySec,
-        verify: verifyEnabled
-      },
-      verification,
-      elapsedMs: Date.now() - startedAt
+    const observed = {
+      artist: String(args.artist || "").trim() || "Unknown Artist",
+      song: String(args.song || "").trim() || "Unknown Song",
+      bytes: bodyBuffer?.length || expectedSize || 0,
+      format: extension
     };
-    await fs.writeFile(`${destination}.json`, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
-    log(jobId, "info", `saved ${destination} (${bodyBuffer.length} bytes)`);
-    emit({ event: "saved", jobId, path: destination, bytes: bodyBuffer.length, report: `${destination}.json` });
+    log(jobId, "info", `observe-only build: nothing was written to ${outputDir || "the download directory"}`);
+    log(jobId, "info", `observed ${observed.artist} — ${observed.song} · ${observed.format} · ${observed.bytes} bytes`);
+    emit({
+      event: "observed",
+      jobId,
+      artist: observed.artist,
+      song: observed.song,
+      bytes: observed.bytes,
+      format: observed.format,
+      contentType: responseObservation?.contentType || null,
+      status: responseObservation?.status ?? null,
+      verified: verification.ok
+    });
     emit({ event: "completed", jobId });
   } finally {
     if (stopProgress) stopProgress();

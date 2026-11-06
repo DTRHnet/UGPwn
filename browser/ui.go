@@ -112,7 +112,7 @@ func newModel(f *Fetcher, c *Cache) model {
 	in.Prompt = ""
 	in.CharLimit = 100
 	in.Width = 80
-	return model{fetch: f, cache: c, view: letters, focus: topPane, letters: append([]string{"0-9"}, strings.Split("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "")...), query: in, expanded: make(map[int]bool), downloadDir: "./tabs", downloadState: make(map[int]string), workerPath: "download-worker.mjs", logDir: "./logs", status: "↑↓ navigate  enter select  / search  v/space queue  w download  L logging  q quit"}
+	return model{fetch: f, cache: c, view: letters, focus: topPane, letters: append([]string{"0-9"}, strings.Split("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "")...), query: in, expanded: make(map[int]bool), downloadDir: "./tabs", downloadState: make(map[int]string), workerPath: "download-worker.mjs", logDir: "./logs", status: "↑↓ navigate  enter select  / search  v/space queue  w observe  L logging  q quit"}
 }
 
 func (m model) Init() tea.Cmd { return nil }
@@ -194,7 +194,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if x.Err != nil {
 			m.downloadState[x.Tab.ID] = "failed"
-			m.status = fmt.Sprintf("download failed: %s", x.Err)
+			m.status = fmt.Sprintf("check failed: %s", x.Err)
+		} else if x.Path == "" {
+			// Observe-only build: the worker reports metadata and never a file,
+			// so an empty Path is the expected shape of a success.
+			m.downloadState[x.Tab.ID] = "observed"
+			m.status = fmt.Sprintf("observed %s · %s (download disabled)", x.Observation, formatBytes(x.Bytes))
 		} else {
 			m.downloadState[x.Tab.ID] = "done"
 			m.status = fmt.Sprintf("saved %s (%s)", x.Path, formatBytes(x.Bytes))
@@ -203,7 +208,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.startNextDownload()
 		}
 		if !failed {
-			m.status = fmt.Sprintf("downloads complete: %d/%d", m.downloadDone, len(m.downloadQueue))
+			m.status = fmt.Sprintf("queue complete: %d/%d observed", m.downloadDone, len(m.downloadQueue))
 		}
 		m.downloadCancel = nil
 		m.downloadCtx = nil

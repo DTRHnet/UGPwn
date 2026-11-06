@@ -30,6 +30,10 @@ type jobOutcome struct {
 	path  string
 	bytes int64
 	saved bool
+	// observed is true when the worker reported metadata instead of a file.
+	// This build is observe-only, so it is the normal successful outcome.
+	observed    bool
+	observation string
 }
 
 // jobRunner executes one job. The default implementation spawns the Puppeteer
@@ -106,8 +110,12 @@ func (s *dashboardState) execute(job *Job) {
 		s.finish(job, StatusFailed, err.Error(), "", 0)
 	case outcome.saved:
 		s.finish(job, StatusCompleted, "download finished", outcome.path, outcome.bytes)
+	case outcome.observed:
+		// Observe-only build: the job succeeded by reporting metadata. The job
+		// keeps an empty Path on purpose — there is no file to point at.
+		s.finish(job, StatusCompleted, outcome.observation, "", 0)
 	default:
-		s.finish(job, StatusFailed, "worker did not report a saved file", "", 0)
+		s.finish(job, StatusFailed, "worker did not report an observation", "", 0)
 	}
 
 	s.mu.Lock()
@@ -358,6 +366,13 @@ func applyJobEvent(job *Job, ev workerEvent) (LogLine, bool) {
 		}
 		job.Progress = 100
 		return LogLine{JobID: ev.JobID, Level: LevelInfo, Text: "saved " + displayOr(ev.Path, "file")}, true
+	case "observed":
+		// Observe-only: metadata replaced the file. No Path is set.
+		if ev.Bytes > 0 {
+			job.Bytes = ev.Bytes
+		}
+		job.Progress = 100
+		return LogLine{JobID: ev.JobID, Level: LevelInfo, Text: "observed " + displayOr(observationSummary(ev), "download metadata")}, true
 	case "completed":
 		job.Progress = 100
 		return LogLine{JobID: ev.JobID, Level: LevelInfo, Text: "worker completed"}, true
@@ -454,6 +469,10 @@ func (s *dashboardState) runWorker(ctx context.Context, job *Job) (jobOutcome, e
 				outcome.saved = true
 				outcome.path = ev.Path
 				outcome.bytes = ev.Bytes
+			case "observed":
+				outcome.observed = true
+				outcome.bytes = ev.Bytes
+				outcome.observation = observationSummary(ev)
 			case "completed":
 				completed = true
 			case "error":
@@ -505,11 +524,11 @@ func (s *dashboardState) runWorker(ctx context.Context, job *Job) (jobOutcome, e
 		}
 		return outcome, fmt.Errorf("worker exited: %w", waitErr)
 	}
-	if !outcome.saved && !completed {
+	if !outcome.saved && !outcome.observed && !completed {
 		if workerError != "" {
 			return outcome, errors.New(workerError)
 		}
-		return outcome, errors.New("worker did not report a saved file")
+		return outcome, errors.New("worker did not report an observation")
 	}
 	return outcome, nil
 }

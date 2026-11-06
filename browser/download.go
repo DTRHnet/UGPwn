@@ -22,7 +22,10 @@ type downloadResult struct {
 	Bytes   int64
 	Report  string
 	Message string
-	Err     error
+	// Observation carries the metadata-only summary an observe-only worker
+	// reports. When it is set, Path is empty: no file exists.
+	Observation string
+	Err         error
 }
 
 type downloadProgress struct {
@@ -46,6 +49,10 @@ type workerEvent struct {
 	Report  string `json:"report"`
 	Bytes   int64  `json:"bytes"`
 	Message string `json:"message"`
+	// Observe-only metadata: the worker reports these instead of a file.
+	Artist string `json:"artist"`
+	Song   string `json:"song"`
+	Format string `json:"format"`
 }
 
 type workerOutput struct {
@@ -57,11 +64,12 @@ type workerOutput struct {
 }
 
 type downloadSession struct {
-	tab     Tab
-	ch      chan workerOutput
-	saved   workerEvent
-	last    workerEvent
-	logFile *os.File
+	tab      Tab
+	ch       chan workerOutput
+	saved    workerEvent
+	observed workerEvent
+	last     workerEvent
+	logFile  *os.File
 }
 
 func runDownload(ctx context.Context, tab Tab, directory, worker string, logFile *os.File) tea.Cmd {
@@ -138,6 +146,9 @@ func (s *downloadSession) collect(cmd *exec.Cmd, stdout, stderr io.ReadCloser) {
 				if event.Event == "saved" {
 					s.saved = event
 				}
+				if event.Event == "observed" {
+					s.observed = event
+				}
 				// Keep the complete structured event in the pane when it can be
 				// consumed immediately; the log file remains lossless.
 				sendProgress(workerOutput{event: event, line: line, stream: stream})
@@ -191,10 +202,30 @@ func readDownloadOutput(s *downloadSession) tea.Cmd {
 			if output.err != nil {
 				return downloadResult{Tab: s.tab, Err: output.err}
 			}
+			// Observe-only worker: an `observed` event replaces `saved` and no
+			// path is ever reported. filepath.Clean("") would yield ".", so the
+			// two cases must not share a branch.
+			if s.saved.Path == "" {
+				return downloadResult{Tab: s.tab, Observation: observationSummary(s.observed), Bytes: s.observed.Bytes}
+			}
 			return downloadResult{Tab: s.tab, Path: filepath.Clean(s.saved.Path), Bytes: s.saved.Bytes, Report: s.saved.Report}
 		}
 		return downloadProgress{session: s, line: output.line, event: output.event, stream: output.stream}
 	}
+}
+
+// observationSummary renders the metadata an observe-only worker reports:
+// artist, song and the Guitar Pro format the server declared. The file itself is
+// never written, so this string is the whole result of a run.
+func observationSummary(event workerEvent) string {
+	if event.Event != "observed" {
+		return ""
+	}
+	summary := displayOr(event.Artist, "Unknown artist") + " — " + displayOr(event.Song, "Unknown song")
+	if event.Format != "" {
+		summary += " · " + event.Format
+	}
+	return summary
 }
 
 func formatWorkerEvent(event workerEvent) string {
@@ -204,6 +235,12 @@ func formatWorkerEvent(event workerEvent) string {
 	}
 	if event.Code != "" {
 		parts = append(parts, event.Code)
+	}
+	if event.Artist != "" || event.Song != "" {
+		parts = append(parts, strings.TrimSpace(event.Artist+" — "+event.Song))
+	}
+	if event.Format != "" {
+		parts = append(parts, event.Format)
 	}
 	if event.Message != "" {
 		parts = append(parts, event.Message)
