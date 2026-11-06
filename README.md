@@ -169,11 +169,11 @@ bar and a `fuzzyMatch` that mirrors a fuzzy finder's subsequence matching, so no
 external binary is needed.
 
 **Stage 3 — the TUI, and tmux.** One row per run was still too slow, so the next
-build put the whole result tree on screen: an Ink/React CLI
-([`DTRHnet/133748`](https://github.com/DTRHnet/133748), v0.2.0-alpha, changelog
-entries from May 2025) with arrow-key navigation, expandable artist/song/tab
-nodes, sorting by type, artist, song or tab type, a `grab` command for a single
-tab, and the ability to mark several rows and grab them one after another. One
+build put the whole result tree on screen: an Ink/React CLI (`DTRHnet/133748`,
+v0.2.0-alpha, changelog entries from May 2025 — the repository is private now)
+with arrow-key navigation, expandable artist/song/tab nodes, sorting by type,
+artist, song or tab type, a `grab` command for a single tab, and the ability to
+mark several rows and grab them one after another. One
 process still shows one view, which is where tmux came in: the picker in one pane,
 the worker's output in another, the queue in a third, moving between them instead
 of retyping a command. This repository is the same idea folded into one Go
