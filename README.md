@@ -8,12 +8,13 @@ flow on Ultimate Guitar. It has two front ends over one Go core:
 
 Both drive the same `Puppeteer` worker to save the files they obtain.
 
-> **Status: private research use only.**
-> This tree is internal tooling built around a security disclosure. It is not
-> published, not redistributed, and must not be pointed at content you are not
-> authorized to retrieve. Read [SECURITY.md](SECURITY.md) before running it — it
-> describes exactly what the download worker does, including the
-> capture-and-replay fallback and the risks that come with it.
+> **Status: research use only. Published for reference, not for redistribution.**
+> This tree is internal tooling built around a security disclosure. The source is
+> public so the finding can be reviewed and reproduced, but the licence grants no
+> rights (see [LICENSE](LICENSE)): do not redistribute it, and do not point it at
+> content you are not authorized to retrieve. Read [SECURITY.md](SECURITY.md)
+> before running it — it describes exactly what the download worker does,
+> including the capture-and-replay fallback and the risks that come with it.
 
 ## Requirements
 
