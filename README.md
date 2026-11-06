@@ -317,6 +317,24 @@ Use `make` (or `make web`) first.
 | `Esc` / `Left` | go back |
 | `q` / `Ctrl+C` | quit |
 
+## Watch it run
+
+Two and a half minutes of the terminal UI: browsing an artist, queueing Guitar Pro
+variants and running the observation queue. Nothing is saved — each queued tab
+ends with an `observed` line and no file.
+
+<p align="center">
+  <a href="tui-demo.mp4" title="Play the TUI demo — 2:25, 1280x656, 1.2 MB MP4">
+    <img src="tui-demo-poster.jpg" alt="echoheistv2 terminal UI, first frame of the demo recording" width="900">
+  </a>
+</p>
+
+<p align="center"><sub><strong>▶ TUI demo</strong> — 2:25 · 1280×656 · 1.2&nbsp;MB MP4 · click the still to play</sub></p>
+
+GitHub does not inline video hosted in a repository, so the still links to
+[`tui-demo.mp4`](tui-demo.mp4), which plays in GitHub's own file viewer. Drag the
+file into a README editor if you want a player embedded in the page body.
+
 ## What a run produces
 
 Nothing on disk. For each queued tab the worker reports:
