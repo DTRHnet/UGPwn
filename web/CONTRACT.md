@@ -51,8 +51,8 @@ type Job = {
   tab: Tab;
   status: JobStatus;
   message?: string;
-  path?: string;        // saved file path
-  bytes: number;        // bytes written
+  path?: string;        // empty in observe-only builds — there is no file
+  bytes: number;        // observed byte count
   progress: number;     // 0..100
   source: string;       // e.g. "Ultimate Guitar"
   tag: string;          // e.g. "GP7"
@@ -152,7 +152,8 @@ job list (job list is small; logs are incremental). The frontend keeps its own
 ## Worker protocol (stdout, one JSON object per line)
 
 Existing: `started`, `trace`, `request`, `response`, `navigated`,
-`navigation-warning`, `saved`, `completed`, `error`.
+`navigation-warning`, `observed`, `completed`, `error`. (`saved` is no longer
+produced by the shipped worker.)
 
 Added:
 
@@ -164,9 +165,19 @@ Added:
 
 `progress` is throttled to at most ~5 lines/second. `total` is 0 when unknown.
 
-Worker flags: `--url`, `--output-dir`, `--artist`, `--song`, `--job-id`, plus
-`--format`, `--versions` (comma list), `--include` (comma list), `--timeout-sec`,
-`--retries`, `--delay-sec`.
+Worker flags: `--url`, `--output-dir` (accepted, ignored), `--artist`, `--song`,
+`--job-id`, plus `--format`, `--versions` (comma list), `--include` (comma list),
+`--timeout-sec`, `--retries`, `--delay-sec`, `--verify`.
+
+Observe-only contract: a successful run emits `observed` and then `completed`, and
+never emits `saved`.
+
+```json
+{"event":"observed","jobId":"...","artist":"...","song":"...","bytes":48213,"format":".gp5","contentType":"...","status":200,"verified":true}
+```
+
+`path` stays empty for such a job: the client must not expect a file, and a job
+that reports `completed` with no `observed` or `saved` event is a failure.
 
 ## What is actually enforced vs recorded
 
@@ -178,9 +189,9 @@ the options row.
 | `timeoutSec` | **Enforced** — overall worker deadline and the CDP body read budget |
 | `retries` | **Enforced** — CDP body-read attempts and failed-navigation retries |
 | `delaySec` | **Enforced** — pause before navigating |
-| `verify` | **Enforced** — magic-byte (`FICHIER GUITAR PRO`) / content-type check before saving |
-| `format` | **Preference** — biases which saved extension is chosen; no transcoding |
-| `versions` / `include` | **Recorded** — written into the sidecar report; they do not filter a single-file download |
+| `verify` | **Reported** — magic-byte (`FICHIER GUITAR PRO`) / content-type check on the observed response; a failure is logged, there is no file to reject |
+| `format` | **Preference** — labels the observed extension; no transcoding |
+| `versions` / `include` | **Recorded** — written into the job log; they do not filter a single observation |
 
 ## Sources
 

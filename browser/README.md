@@ -1,15 +1,15 @@
 # Echoheist Guitar Pro browser
 
 A cross-platform terminal UI for browsing Ultimate Guitar's Guitar Pro metadata.
-It can also queue selected Guitar Pro variants for sequential browser-managed
-downloads through the local Puppeteer worker. Use downloads only for files you
-are authorized to retrieve.
+It can also queue selected Guitar Pro variants for a local Puppeteer worker that
+**observes** the site's download response and reports what it is: artist, song,
+byte count and Guitar Pro version.
 
-The worker downloads through Chromium first, but when every browser path fails it
-falls back to replaying the captured download request from Node with the page's
-own headers, including cookies. That fallback is deliberate research tooling; it
-is described in full in `../SECURITY.md`. Do not redistribute this tool or the
-files it saves.
+The worker does not save the payload, and it does not re-issue the captured
+request from Node. Those paths were removed deliberately — the finding they were
+built to demonstrate is documented in `../README.md`, and `../SECURITY.md` records
+why a working downloader is not the same thing as evidence. `--download-dir` is
+accepted and ignored.
 
 ## Run
 
@@ -17,8 +17,8 @@ files it saves.
 go run .
 ```
 
-From the repository root, install the download worker dependencies before using
-downloads:
+From the repository root, install the worker dependencies before using the
+observation queue:
 
 ```sh
 cd ..
@@ -58,10 +58,10 @@ The cache is stored in the platform cache directory under
 - `Ctrl-U` / `Ctrl-D`: half-page scroll
 - `r`: refresh the current page
 - `y`: copy the selected canonical URL
-- `Space` or `v`: add/remove the highlighted Guitar Pro variant from the download queue
-- `d`: edit the download destination directory
-- `w`: run queued downloads sequentially
-- `x`: clear the queue when no download is running
+- `Space` or `v`: add/remove the highlighted Guitar Pro variant from the observation queue
+- `d`: edit the (ignored) download destination directory
+- `w`: run the queue, one observation at a time
+- `x`: clear the queue when nothing is running
 - `Esc` / `Left`: go back
 - `q`: quit
 
@@ -72,10 +72,9 @@ children, and the right preview pane follows the selected song or variant.
 
 Selecting a tab also reads the detail page's metadata when available, including
 the contributor, posted date, Guitar Pro extension (`.gp3`, `.gp4`, `.gp5`, and
-similar), file size, rating, tuning, difficulty, views, and favorites. Queued
-downloads open each selected tab in Chromium and save files under
-`tabs/<artist>/<song>/<song>_v1.gp`, `<song>_v2.gp`, `<song>_v3.gp`, and so on. Missing directories
-are created automatically, and each file receives a sidecar JSON report.
+similar), file size, rating, tuning, difficulty, views, and favorites. A queued
+run opens each selected tab in Chromium and reports
+`<artist> — <song> · <extension> · <bytes>`; nothing is written to disk.
 
 The layout is responsive: the alphabet occupies a single top strip, the artist
 browser fills the lower-left half, and the lower-right half is split into

@@ -2,45 +2,47 @@
 
 This file exists because earlier documentation of this tool claimed it never
 replayed captured browser requests. **That claim was false**, and this document
-describes what the code actually does so the tool can be used honestly and
-safely.
+exists so the tool can be used honestly and safely. It was rewritten again when
+the payload path was removed; everything below describes the code as it is.
 
 ## Intended use
 
-Private security research against a flow the author has already disclosed:
-the Guitar Pro download route on Ultimate Guitar. Use it only on content you are
-authorized to retrieve and only for producing redacted evidence for that
-disclosure. Do not redistribute this tool or the files it saves.
+Private security research against a flow the author has already disclosed: the
+Guitar Pro download route on Ultimate Guitar. See [README.md](README.md#1-summary) for the
+finding itself. Use it only on content you are authorized to access.
 
-## What the download worker actually does
+## What the worker does now: it observes, and it cannot download
 
 `browser/download-worker.mjs` opens the queued tab page in a real Chromium and
-tries, in order, to obtain the Guitar Pro payload:
+records what the page's own download request returns. It emits one metadata
+event — artist, song, byte count, Guitar Pro version — and **stops there**.
 
-1. **CDP body read** — `Network.getResponseBody` for the response matching the
-   download route (up to three attempts).
-2. **Puppeteer body read** — `response.buffer()`.
-3. **Filesystem watch** — the browser's own download into a temp directory.
-4. **Capture-and-replay fallback** — if all three produce nothing, the worker
-   re-issues the captured download request from Node with the tab page's own
-   request headers (`cookie`, `authorization`, `referer`, `origin`,
-   user-agent) via `fetch`.
+It does not:
 
-Stage 4 is the important one. It is deliberately kept: it reproduces the
-access-control finding without depending on browser download plumbing, which is
-what makes the observation reproducible. It also means:
+- re-issue the captured request from Node (the old capture-and-replay fallback);
+- write the payload to `--output-dir`, a temp file, or a sidecar report;
+- emit a `saved` event, so no caller can be handed a file.
 
-- the worker can retrieve the payload **outside** the browser session that the
-  page believed it was serving;
-- the same shortcut is the mechanism a real attacker would use, so treat results
-  as exploit-capable evidence, not as harmless scraping;
-- the saved files are third-party copyrighted content. They are git-ignored and
-  must never be committed, packed into a release, or shared.
+The removals are load-bearing, not cosmetic. The replay stage used to retrieve the
+payload **outside** the browser session that the page believed it was serving,
+which is the exact mechanism a real attacker would use. Without it, and without a
+write, this is evidence-gathering for a disclosure rather than an exploit kit.
 
-If you do not need stage 4, delete it (`download-worker.mjs`, the
-`downloadRequest` capture and the `fetch` fallback) and the tool degrades to
-"browser downloads only" — still capable of the same access, just with more
-failure modes.
+`browser/worker_contract_test.go` fails if any of those three return. It is a
+source-level contract because the worker is JavaScript inside a Go module with no
+Node test runner.
+
+### What a run still touches
+
+- The tab page and its download response are fetched by the browser, as any
+  visitor's browser would fetch them.
+- Chromium may stage a partial response in an OS temp directory. The worker
+  deletes that directory before exiting; nothing lands in the download directory.
+- `--output-dir` is still accepted so the CLI contract does not change, and it is
+  **ignored**.
+- The payload check (`--verify`) still runs and its result is reported, but a
+  failure is no longer fatal: there is no file to reject, only a claim to
+  qualify.
 
 ## Other behaviours worth knowing
 
@@ -52,20 +54,20 @@ failure modes.
 - **`--no-sandbox` is passed to Chromium** because it runs acceptably in
   containers. It is a real reduction in browser isolation against a page you do
   not control.
-- **The dashboard executes a local script.** `--worker` names the Node script
-  run for every download. It is settable only at startup, never over HTTP, and
-  every `/api` route requires the per-run token; the server emits no CORS
-  headers. Do not bind it to a non-loopback address.
-- **Saved payloads are not content-verified.** A 200 response carrying an HTML
-  error page would be written with whatever extension the response suggested.
+- **The dashboard executes a local script.** `--worker` names the Node script run
+  for every job. It is settable only at startup, never over HTTP, and every
+  `/api/*` route requires the per-run token; the server emits no CORS headers. Do
+  not bind it to a non-loopback address.
+- **`--worker` is a trust boundary.** Nothing stops an operator pointing it at
+  their own script; the shipped script is observe-only, the flag is not a
+  security control.
 
 ## Scope guardrails
 
 - Only `https://tabs.ultimate-guitar.com/...` tab URLs are accepted by the
   worker; the URL allowlist is enforced before navigation.
-- The tool performs no request interception or header forging inside the page
-  it loads: the page makes its own requests, and stage 4 is a separate out-of-page
-  replay from Node.
+- The tool performs no request interception or header forging inside the page it
+  loads: the page makes its own requests, and they are only read.
 
 ## Dashboard API surface
 
@@ -77,12 +79,19 @@ failure modes.
 - `workerPath` is read-only over HTTP — it is the script that gets executed, so it
   can only be set with `--worker` at startup.
 - `downloadDir` / `logDir` are validated (non-empty, no NUL bytes, cleaned) before
-  use.
+  use. `downloadDir` is no longer written by the worker.
 - Cancelling a job kills the worker's process group, so Chromium is not orphaned.
 - The live log ring buffer and the `logs/` files contain worker trace lines,
   including response headers from the target page. Treat both as sensitive.
-- Job history and favorites are persisted in SQLite: tab metadata and local file
-  paths only, never credentials or captured cookies.
+- Job history and favorites are persisted in SQLite: tab metadata and job
+  outcome. A completed job now records an observation, not a file path.
+
+## The standalone script
+
+`upstream-echoHEIST.sh` is deliberately neutralised. It prints artist, song, size
+and Guitar Pro version for the tab URL you give it, and cannot save anything: its
+`curl` replay and file write are gone. Running it expecting a file is a user
+error, and the script says so before it does anything.
 
 ## Reporting
 
