@@ -18,8 +18,8 @@ Both drive the same `Puppeteer` worker to save the files they obtain.
 
 ## Requirements
 
-- Go 1.23+
-- Node.js 20+ with `npm`
+- Go 1.24.2+ (declared in `go.work`, so `GOTOOLCHAIN=auto` fetches it if needed)
+- Node.js 20+ with `npm` (CI builds on 22)
 - Chrome or Chromium (Puppeteer's bundled Chromium works; otherwise set `CHROME_PATH`)
 
 ## Setup
