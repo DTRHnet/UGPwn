@@ -25,3 +25,48 @@ node_modules/
 
 # Headless render evidence (regenerate with scripts/render_check.mjs)
 /ui-render.png
+
+# Go build/test output
+*.test
+*.out
+coverage.txt
+coverage.html
+/browser/*.exe
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.keystore
+secrets/
+credentials*
+
+# Databases and caches produced at runtime
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+__pycache__/
+*.py[cod]
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# OS metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini

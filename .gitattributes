@@ -1,0 +1,40 @@
+# Normalise line endings: LF in the repository and in the working tree, so the
+# shell scripts, Makefile and Go sources behave the same on every checkout.
+* text=auto eol=lf
+
+# Explicit text files that must keep LF (a CRLF shell script will not run)
+*.go            text eol=lf
+*.mjs           text eol=lf
+*.cjs           text eol=lf
+*.js            text eol=lf
+*.ts            text eol=lf
+*.tsx           text eol=lf
+*.css           text eol=lf
+*.html          text eol=lf
+*.json          text eol=lf
+*.md            text eol=lf
+*.sh            text eol=lf
+*.mod           text eol=lf
+*.sum           text eol=lf
+Makefile        text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+go.work         text eol=lf
+
+# Generated lockfiles: diff-noise reduction, and hidden from the language stats
+package-lock.json      text eol=lf linguist-generated=true -diff
+web/package-lock.json  text eol=lf linguist-generated=true -diff
+
+# Binary assets must never be line-ending converted
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.zip   binary
+*.gz    binary
+*.tgz   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary

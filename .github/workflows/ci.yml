@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: fmt + vet + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.work
+          cache-dependency-path: browser/go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # The Go package embeds browser/dashboard/dist, so the frontend has to be
+      # built before anything under browser/ will compile.
+      - name: Build dashboard
+        run: |
+          npm --prefix web ci --no-audit --no-fund
+          npm --prefix web run build
+
+      - name: gofmt
+        working-directory: browser
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt would rewrite:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        working-directory: browser
+        run: go vet ./...
+
+      - name: go test
+        working-directory: browser
+        run: go test ./...

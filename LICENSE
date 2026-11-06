@@ -1,0 +1,20 @@
+Copyright (c) 2026 echoheist research. All rights reserved.
+
+This repository is published for reference and review only. No licence is
+granted: no permission is given to copy, modify, redistribute, sublicense, or
+sell this software or any part of it, in source or binary form, except as
+permitted by applicable law or by the express prior written permission of the
+copyright holder.
+
+The tool automates a download flow against a third-party service. Running it
+against that service, against any other service, or against content you are not
+authorized to retrieve is outside the scope of what this repository grants and
+is solely the responsibility of whoever runs it. See README.md and SECURITY.md.
+
+The software is provided "AS IS", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and noninfringement. In no event shall the
+authors or copyright holders be liable for any claim, damages or other
+liability, whether in an action of contract, tort or otherwise, arising from,
+out of or in connection with the software or the use or other dealings in the
+software.
