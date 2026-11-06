@@ -1,35 +1,49 @@
 version: 2
+# Security fixes still arrive automatically (repo setting: Dependabot security
+# updates). Version updates below are deliberately narrow: weekly, and major
+# bumps are ignored because they land here as red CI on an unpinned toolchain
+# rather than as a reviewable change. Do those by hand in a branch.
 updates:
-  # Go module lives in browser/
   - package-ecosystem: gomod
     directory: /browser
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     commit-message:
       prefix: deps(go)
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
-  # Dashboard frontend
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     commit-message:
       prefix: deps(web)
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    groups:
+      web-minor-patch:
+        update-types: ['minor', 'patch']
 
-  # Puppeteer worker
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     commit-message:
       prefix: deps(worker)
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 2
     commit-message:
       prefix: ci
