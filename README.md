@@ -1,7 +1,7 @@
 # echoheistv2 — Guitar Pro download authorization PoC
 
 <p align="center">
-  <img src="main.png" alt="echoheistv2 dashboard with the David Bowie song 'Afraid' selected in the queue" width="900">
+  <img src="echoheist.png" alt="echoheistv2 dashboard with the David Bowie song 'Afraid' selected in the queue" width="900">
 </p>
 
 > [!WARNING]
