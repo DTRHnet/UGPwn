@@ -6,6 +6,6 @@
     "download": "node download-worker.mjs"
   },
   "dependencies": {
-    "puppeteer": "^25.15.0"
+    "puppeteer": "^25.16.0"
   }
 }
